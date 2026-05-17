@@ -1,0 +1,8 @@
+[project]
+name = "online-obs"
+version = "0.2.0"
+description = "Headless OBS-style API service backed by GStreamer pipeline generation."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

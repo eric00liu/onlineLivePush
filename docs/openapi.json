@@ -1,0 +1,889 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Online OBS API",
+    "version": "0.2.0",
+    "description": "Headless OBS-style API for configuring live compositing sessions, uploads, and RTMP/HLS streaming."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8080",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Check API health",
+        "responses": {
+          "200": {
+            "description": "API is available",
+            "content": {
+              "application/json": {
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "Fetch this OpenAPI document",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON document"
+          }
+        }
+      }
+    },
+    "/config": {
+      "get": {
+        "summary": "Read public runtime configuration",
+        "responses": {
+          "200": {
+            "description": "Runtime configuration used by the browser console",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicConfig"
+                },
+                "example": {
+                  "hlsHost": "127.0.0.1",
+                  "hlsPort": 8888,
+                  "uploadDir": "/Users/liu/code/project/online_obs/uploads",
+                  "dbEnabled": false,
+                  "gstPluginDir": "/Users/liu/code/project/online_obs/gst-min-plugins",
+                  "authRequired": false,
+                  "maxUploadBytes": 1073741824,
+                  "allowedUploadTypes": ["video/*", "audio/*", "image/*"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions": {
+      "get": {
+        "summary": "List sessions",
+        "responses": {
+          "200": {
+            "description": "Known sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Session"
+                      }
+                    }
+                  },
+                  "required": ["sessions"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a session",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCreate"
+              },
+              "example": {
+                "id": "demo",
+                "canvas": {
+                  "width": 1280,
+                  "height": 720,
+                  "fps": 30
+                },
+                "output": {
+                  "type": "rtmp",
+                  "url": "rtmp://127.0.0.1:1935/live/demo",
+                  "bitrateKbps": 2500
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "get": {
+        "summary": "Get one session",
+        "responses": {
+          "200": {
+            "description": "Session detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update session canvas or output",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "canvas": {
+                    "$ref": "#/components/schemas/Canvas"
+                  },
+                  "output": {
+                    "$ref": "#/components/schemas/Output"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a session",
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "example": {
+                  "id": "demo",
+                  "deleted": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/sources": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "post": {
+        "summary": "Add an input source",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Source"
+              },
+              "examples": {
+                "testsrc": {
+                  "value": {
+                    "id": "camera",
+                    "type": "testsrc",
+                    "pattern": "smpte"
+                  }
+                },
+                "loopingFile": {
+                  "value": {
+                    "id": "clip",
+                    "type": "file",
+                    "uri": "/path/to/clip.mp4",
+                    "loop": true
+                  }
+                },
+                "audio": {
+                  "value": {
+                    "id": "music",
+                    "type": "audio",
+                    "uri": "/path/to/music.wav",
+                    "volume": 0.75
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/sources/{sourceId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        },
+        {
+          "$ref": "#/components/parameters/SourceId"
+        }
+      ],
+      "put": {
+        "summary": "Update an input source",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Source"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete an input source",
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/scene": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "put": {
+        "summary": "Replace the scene graph",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Scene"
+              },
+              "example": {
+                "layers": [
+                  {
+                    "id": "camera-full",
+                    "sourceId": "camera",
+                    "x": 0,
+                    "y": 0,
+                    "width": 1280,
+                    "height": 720,
+                    "zIndex": 0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/pipeline": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "get": {
+        "summary": "Render the GStreamer pipeline without starting it",
+        "responses": {
+          "200": {
+            "description": "Pipeline plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pipeline"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/start": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "post": {
+        "summary": "Start streaming",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/StartRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "Start result"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/restart": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "post": {
+        "summary": "Restart streaming with the latest session configuration",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/StartRequest"
+        },
+        "responses": {
+          "200": {
+            "description": "Restart result"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/stop": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "post": {
+        "summary": "Stop streaming",
+        "responses": {
+          "200": {
+            "description": "Stopped session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/logs": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/SessionId"
+        }
+      ],
+      "get": {
+        "summary": "Read captured process stderr",
+        "responses": {
+          "200": {
+            "description": "Process log",
+            "content": {
+              "application/json": {
+                "example": {
+                  "sessionId": "demo",
+                  "stderr": ""
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/uploads": {
+      "get": {
+        "summary": "List uploaded media",
+        "responses": {
+          "200": {
+            "description": "Uploaded assets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uploads": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Upload"
+                      }
+                    }
+                  },
+                  "required": ["uploads"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload a media file",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Uploaded asset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Upload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/uploads/{storedName}": {
+      "parameters": [
+        {
+          "name": "storedName",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Delete one uploaded asset",
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "example": {
+                  "storedName": "aaaaaaaaaaaa_clip.mp4",
+                  "deleted": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Optional local API token. Required for non-public routes when ONLINE_OBS_AUTH_TOKEN or --auth-token is configured."
+      }
+    },
+    "parameters": {
+      "SessionId": {
+        "name": "sessionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "SourceId": {
+        "name": "sourceId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "requestBodies": {
+      "StartRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "backend": {
+                  "type": "string",
+                  "enum": ["gstreamer", "ffmpeg"],
+                  "default": "gstreamer"
+                },
+                "dryRun": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "example": {
+              "backend": "gstreamer"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "PublicConfig": {
+        "type": "object",
+        "properties": {
+          "hlsHost": {
+            "type": "string",
+            "default": "127.0.0.1"
+          },
+          "hlsPort": {
+            "type": "integer",
+            "default": 8888
+          },
+          "uploadDir": {
+            "type": "string"
+          },
+          "dbEnabled": {
+            "type": "boolean"
+          },
+          "gstPluginDir": {
+            "type": "string"
+          },
+          "authRequired": {
+            "type": "boolean"
+          },
+          "maxUploadBytes": {
+            "type": "integer"
+          },
+          "allowedUploadTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["hlsHost", "hlsPort", "uploadDir", "dbEnabled", "gstPluginDir", "authRequired", "maxUploadBytes", "allowedUploadTypes"]
+      },
+      "Canvas": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "integer",
+            "minimum": 16,
+            "default": 1920
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 16,
+            "default": 1080
+          },
+          "fps": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30
+          }
+        }
+      },
+      "Output": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "rtmp"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "bitrateKbps": {
+                "type": "integer",
+                "minimum": 100,
+                "default": 4000
+              }
+            },
+            "required": ["type", "url"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "fakesink"
+              }
+            },
+            "required": ["type"]
+          }
+        ]
+      },
+      "Source": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["testsrc", "file", "rtmp", "rtsp", "image", "text", "audio"]
+          },
+          "uri": {
+            "type": "string"
+          },
+          "loop": {
+            "type": "boolean",
+            "default": false
+          },
+          "volume": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 1
+          },
+          "pattern": {
+            "type": "string",
+            "default": "smpte"
+          },
+          "text": {
+            "type": "string"
+          },
+          "font": {
+            "type": "string",
+            "default": "Sans 42"
+          }
+        },
+        "required": ["id", "type"]
+      },
+      "Layer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer",
+            "default": 0
+          },
+          "y": {
+            "type": "integer",
+            "default": 0
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 1
+          },
+          "zIndex": {
+            "type": "integer",
+            "default": 0
+          },
+          "visible": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": ["sourceId"]
+      },
+      "Scene": {
+        "type": "object",
+        "properties": {
+          "canvas": {
+            "$ref": "#/components/schemas/Canvas"
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Layer"
+            }
+          }
+        }
+      },
+      "Pipeline": {
+        "type": "object",
+        "properties": {
+          "backend": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "command": {
+            "type": "string"
+          },
+          "loopingSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "audioSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Upload": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "storedName": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "contentType": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["storedName", "name", "path", "size"]
+      },
+      "SessionCreate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "canvas": {
+            "$ref": "#/components/schemas/Canvas"
+          },
+          "output": {
+            "$ref": "#/components/schemas/Output"
+          }
+        }
+      },
+      "Session": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SessionCreate"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["idle", "running", "stopped", "exited"]
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Source"
+                }
+              },
+              "scene": {
+                "$ref": "#/components/schemas/Scene"
+              },
+              "animations": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "pipeline": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Pipeline"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": ["id", "status", "canvas", "output", "sources", "scene", "animations"]
+          }
+        ]
+      }
+    }
+  }
+}

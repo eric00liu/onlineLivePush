@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Online OBS 控制台</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Online OBS</p>
+        <h1>直播推流控制台</h1>
+      </div>
+      <div class="status-strip" aria-live="polite">
+        <span class="status-pill" id="apiStatus">API 检查中</span>
+        <span class="status-pill" id="sessionStatus">未选择会话</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel config-panel" aria-labelledby="sessionTitle">
+        <div class="panel-heading">
+          <h2 id="sessionTitle">会话与输出</h2>
+          <button class="secondary" id="refreshButton" type="button">刷新</button>
+        </div>
+
+        <form class="form-grid" id="sessionForm">
+          <label>
+            <span>会话 ID</span>
+            <input id="sessionId" name="sessionId" value="control-room" autocomplete="off" required>
+          </label>
+          <label>
+            <span>API Token</span>
+            <input id="apiToken" name="apiToken" type="password" autocomplete="off">
+          </label>
+          <label class="span-2">
+            <span>输出 RTMP</span>
+            <input id="rtmpUrl" name="rtmpUrl" value="rtmp://127.0.0.1:1935/live/control-room" autocomplete="off" required>
+          </label>
+          <label>
+            <span>码率 kbps</span>
+            <input id="bitrate" name="bitrate" type="number" min="100" value="2500">
+          </label>
+          <label>
+            <span>宽度</span>
+            <input id="canvasWidth" name="canvasWidth" type="number" min="16" value="1280">
+          </label>
+          <label>
+            <span>高度</span>
+            <input id="canvasHeight" name="canvasHeight" type="number" min="16" value="720">
+          </label>
+          <label>
+            <span>FPS</span>
+            <input id="fps" name="fps" type="number" min="1" value="30">
+          </label>
+          <div class="button-row span-3">
+            <button id="saveSessionButton" type="submit">保存会话</button>
+            <button class="secondary" id="loadSessionButton" type="button">加载会话</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel source-panel" aria-labelledby="sourceTitle">
+        <div class="panel-heading">
+          <h2 id="sourceTitle">输入源</h2>
+          <span class="count" id="sourceCount">0</span>
+        </div>
+
+        <form class="form-grid" id="sourceForm">
+          <label>
+            <span>源 ID</span>
+            <input id="sourceId" value="camera" autocomplete="off" required>
+          </label>
+          <label>
+            <span>类型</span>
+            <select id="sourceType">
+              <option value="testsrc">测试画面</option>
+              <option value="rtmp">RTMP 输入</option>
+              <option value="rtsp">RTSP 输入</option>
+              <option value="file">视频文件</option>
+              <option value="audio">音频</option>
+              <option value="image">图片</option>
+              <option value="text">文字</option>
+            </select>
+          </label>
+          <label class="span-2" id="sourceValueWrap">
+            <span id="sourceValueLabel">测试图案</span>
+            <input id="sourceValue" value="smpte" autocomplete="off">
+          </label>
+          <label class="span-2" id="fileUploadWrap">
+            <span>上传媒体文件</span>
+            <input id="sourceFile" type="file" accept="video/*,audio/*,.mp4,.mov,.mkv,.webm,.flv,.avi,.mp3,.wav,.m4a,.aac,.flac,.ogg">
+          </label>
+          <label class="checkbox-label" id="fileLoopWrap">
+            <input id="sourceLoop" type="checkbox">
+            <span>循环播放</span>
+          </label>
+          <label id="volumeWrap">
+            <span>音量</span>
+            <input id="sourceVolume" type="number" min="0" max="2" step="0.05" value="1">
+          </label>
+          <label id="fontWrap">
+            <span>字体</span>
+            <input id="sourceFont" value="Sans 42" autocomplete="off">
+          </label>
+          <div class="button-row span-3">
+            <button id="saveSourceButton" type="submit">保存输入源</button>
+            <button class="secondary" id="clearSourceButton" type="button">清空表单</button>
+          </div>
+        </form>
+
+        <div class="asset-library" aria-labelledby="assetTitle">
+          <div class="sub-heading">
+            <div>
+              <h3 id="assetTitle">素材库</h3>
+              <span class="subtle" id="uploadCount">0 个文件</span>
+            </div>
+            <button class="secondary" id="refreshUploadsButton" type="button">刷新素材</button>
+          </div>
+          <div class="asset-list" id="uploadList">
+            <div class="empty">暂无上传文件</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>源</th>
+                <th>类型</th>
+                <th>内容</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="sourcesBody">
+              <tr><td colspan="4" class="empty">暂无输入源</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel scene-panel" aria-labelledby="sceneTitle">
+        <div class="panel-heading">
+          <h2 id="sceneTitle">图层</h2>
+          <button class="secondary" id="saveSceneButton" type="button">保存图层</button>
+        </div>
+        <div class="canvas-editor" id="canvasEditor">
+          <div class="canvas-bar">
+            <span id="canvasMeta">1280 x 720</span>
+            <span id="selectedLayerMeta">未选择图层</span>
+          </div>
+          <div class="canvas-stage-wrap">
+            <div class="canvas-stage" id="canvasStage" tabindex="0" aria-label="画布图层编辑器"></div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>显示</th>
+                <th>源</th>
+                <th>X</th>
+                <th>Y</th>
+                <th>宽</th>
+                <th>高</th>
+                <th>透明度</th>
+                <th>层级</th>
+              </tr>
+            </thead>
+            <tbody id="layersBody">
+              <tr><td colspan="8" class="empty">暂无图层</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel control-panel" aria-labelledby="controlTitle">
+        <div class="panel-heading">
+          <h2 id="controlTitle">推流控制</h2>
+          <select id="backend">
+            <option value="gstreamer">GStreamer</option>
+            <option value="ffmpeg">FFmpeg</option>
+          </select>
+        </div>
+        <div class="button-grid">
+          <button id="startButton" type="button">启动</button>
+          <button id="restartButton" type="button">重启</button>
+          <button class="danger" id="stopButton" type="button">停止</button>
+          <button class="secondary" id="pipelineButton" type="button">生成命令</button>
+        </div>
+        <div class="preview-shell">
+          <video id="previewVideo" muted playsinline controls preload="metadata"></video>
+          <div class="preview-state" id="previewState">等待推流</div>
+        </div>
+        <div class="output-links">
+          <a id="hlsLink" href="#" target="_blank" rel="noreferrer">HLS 预览</a>
+          <span id="hlsUrlText">未生成 m3u8</span>
+        </div>
+      </section>
+
+      <section class="panel sessions-panel" aria-labelledby="sessionsTitle">
+        <div class="panel-heading">
+          <h2 id="sessionsTitle">会话</h2>
+          <button class="secondary" id="deleteSessionButton" type="button">删除</button>
+        </div>
+        <div id="sessionList" class="session-list"></div>
+      </section>
+
+      <section class="panel log-panel" aria-labelledby="logTitle">
+        <div class="panel-heading">
+          <h2 id="logTitle">Pipeline / Log</h2>
+          <button class="secondary" id="logsButton" type="button">读取日志</button>
+        </div>
+        <pre id="outputBox">等待操作</pre>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/static/vendor/hls.min.js" defer></script>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

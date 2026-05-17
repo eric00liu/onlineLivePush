@@ -1,0 +1,9 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.gstreamer
+    image: online-obs-api:gstreamer-local
+    environment:
+      ONLINE_OBS_GST_PLUGIN_DIR: ""
+      ONLINE_OBS_AAC_ENCODER: avenc_aac

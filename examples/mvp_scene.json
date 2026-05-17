@@ -1,0 +1,27 @@
+{
+  "canvas": {
+    "width": 1280,
+    "height": 720,
+    "fps": 30
+  },
+  "layers": [
+    {
+      "id": "camera-full",
+      "sourceId": "camera",
+      "x": 0,
+      "y": 0,
+      "width": 1280,
+      "height": 720,
+      "zIndex": 0
+    },
+    {
+      "id": "title-bar",
+      "sourceId": "title",
+      "x": 40,
+      "y": 40,
+      "width": 500,
+      "height": 96,
+      "zIndex": 1
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: online-obs-api:local
+    environment:
+      ONLINE_OBS_DB: /app/data/online_obs.sqlite3
+      ONLINE_OBS_UPLOAD_DIR: /app/uploads
+      ONLINE_OBS_HLS_HOST: 127.0.0.1
+      ONLINE_OBS_HLS_PORT: "${ONLINE_OBS_HLS_PORT:-8888}"
+    ports:
+      - "${ONLINE_OBS_API_PORT:-8080}:8080"
+    volumes:
+      - online_obs_data:/app/data
+      - online_obs_uploads:/app/uploads
+    depends_on:
+      - mediamtx
+    networks:
+      media:
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    ports:
+      - "${ONLINE_OBS_RTMP_PORT:-1935}:1935"
+      - "${ONLINE_OBS_HLS_PORT:-8888}:8888"
+    networks:
+      media:
+        ipv4_address: 10.89.0.10
+
+volumes:
+  online_obs_data:
+  online_obs_uploads:
+
+networks:
+  media:
+    ipam:
+      config:
+        - subnet: 10.89.0.0/24
