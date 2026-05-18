@@ -286,6 +286,7 @@ async function sourcePayload() {
     }
     if (type === "audio") {
       source.volume = readVolume();
+      source.loop = els.sourceLoop.checked;
     }
     return source;
   }
@@ -298,6 +299,7 @@ async function sourcePayload() {
   }
   if (type === "audio") {
     source.volume = readVolume();
+    source.loop = els.sourceLoop.checked;
   }
   if (type === "text") {
     if (!value) throw new Error("请填写文字内容");
@@ -893,7 +895,7 @@ function resetSourceForm() {
 function updateSourceFields() {
   const type = els.sourceType.value;
   els.fileUploadWrap.style.display = ["file", "audio"].includes(type) ? "grid" : "none";
-  els.fileLoopWrap.style.display = type === "file" ? "flex" : "none";
+  els.fileLoopWrap.style.display = ["file", "audio"].includes(type) ? "flex" : "none";
   els.volumeWrap.style.display = type === "audio" ? "grid" : "none";
   els.fontWrap.style.display = type === "text" ? "grid" : "none";
   if (type === "text") {
@@ -1138,7 +1140,7 @@ function sourceSummary(source) {
   if (source.type === "text") return source.text;
   if (source.type === "testsrc") return source.pattern;
   if (source.type === "file") return `${source.uri}${source.loop ? " · loop" : ""}`;
-  if (source.type === "audio") return `${source.uri} · 音量 ${Number(source.volume ?? 1).toFixed(2)}`;
+  if (source.type === "audio") return `${source.uri} · 音量 ${Number(source.volume ?? 1).toFixed(2)}${source.loop ? " · loop" : ""}`;
   return source.uri;
 }
 

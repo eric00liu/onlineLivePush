@@ -76,7 +76,7 @@ def normalize_source(value: Any) -> dict:
         source["uri"] = _as_str(payload.get("uri"), "source.uri")
     if source_type == "audio":
         source["volume"] = _as_number(payload.get("volume", 1.0), "source.volume", minimum=0.0, maximum=2.0)
-    if source_type == "file":
+    if source_type in {"file", "audio"}:
         source["loop"] = bool(payload.get("loop", False))
     if source_type == "text":
         source["text"] = _as_str(payload.get("text"), "source.text")

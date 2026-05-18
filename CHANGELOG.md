@@ -8,6 +8,7 @@ All notable changes to Online OBS are recorded here.
 
 - Static control console for sessions, sources, scenes, stream controls, HLS preview, logs, uploads, and visual layer editing.
 - GStreamer RTMP pipeline generation with H264 video, silent AAC fallback, file-source looping, and real `audio` source mixing through `audiomixer`.
+- Audio sources can opt into `loop` so background music or ambience can restart with the stream pipeline.
 - FFmpeg fallback backend for generated RTMP smoke streams.
 - MediaMTX local RTMP/HLS workflow and Docker Compose stack.
 - Optional SQLite persistence for sessions and uploaded asset metadata.
@@ -27,4 +28,3 @@ All notable changes to Online OBS are recorded here.
 - Running scene/source changes still require restart to apply.
 - File looping restarts the pipeline at clip end and is not frame-seamless.
 - The FFmpeg backend remains a smoke-test fallback, not a full compositing backend.
-

@@ -46,7 +46,7 @@ Online OBS 是一个无头化、可通过浏览器控制的直播合成服务。
 
 ![音频输入源](docs/images/audio-input.png)
 
-音频文件可以上传或作为 `audio` 输入源引用，设置独立音量，并混入 RTMP 输出。
+音频文件可以上传或作为 `audio` 输入源引用，设置独立音量，按需循环播放，并混入 RTMP 输出。
 
 ## 架构设计
 
@@ -261,7 +261,7 @@ curl -X POST http://127.0.0.1:8080/sessions/demo/sources \
 
 curl -X POST http://127.0.0.1:8080/sessions/demo/sources \
   -H 'Content-Type: application/json' \
-  -d '{"id": "music", "type": "audio", "uri": "/path/to/music.wav", "volume": 0.75}'
+  -d '{"id": "music", "type": "audio", "uri": "/path/to/music.wav", "volume": 0.75, "loop": true}'
 ```
 
 更新或删除输入源：
@@ -382,12 +382,12 @@ curl -X POST http://127.0.0.1:8080/sessions/demo/sources \
   -d '{"id": "clip", "type": "file", "uri": "/path/to/clip.mp4", "loop": true}'
 ```
 
-对上传或本地音频文件，使用 `audio` 输入源。GStreamer 会通过 `audiomixer` 混合所有音频源；`volume` 取值范围为 `0` 到 `2`：
+对上传或本地音频文件，使用 `audio` 输入源。GStreamer 会通过 `audiomixer` 混合所有音频源；`volume` 取值范围为 `0` 到 `2`，`loop` 可以让音频源结束后重启推流管线继续循环：
 
 ```bash
 curl -X POST http://127.0.0.1:8080/sessions/demo/sources \
   -H 'Content-Type: application/json' \
-  -d '{"id": "music", "type": "audio", "uri": "/path/to/music.wav", "volume": 0.75}'
+  -d '{"id": "music", "type": "audio", "uri": "/path/to/music.wav", "volume": 0.75, "loop": true}'
 ```
 
 ## 当前限制
@@ -395,7 +395,7 @@ curl -X POST http://127.0.0.1:8080/sessions/demo/sources \
 - 除非设置 `--db` 或 `ONLINE_OBS_DB`，否则状态只保存在内存中。
 - 启用 SQLite 后会持久化上传素材元数据；没有元数据的旧文件会继续从目录和 MIME 猜测中派生展示信息。
 - API 已表达动态管线变更，但运行中的推流还不会热更新；修改场景或输入源后请使用 `restart` 生效。
-- 视频文件只有在输入源设置 `"loop": true` 时才循环；当前循环方式是在文件结束后重启管线，不是帧级无缝循环。
+- 视频文件或音频文件只有在输入源设置 `"loop": true` 时才循环；当前循环方式是在文件结束后重启管线，不是帧级无缝循环。
 - 文字图层使用基础 `textoverlay` 管线。生产级渲染后续应考虑 `Skia / Cairo / Canvas / Lottie -> appsrc -> GStreamer`。
 - `ffmpeg` 后端是本地 smoke 测试兜底，目前只支持生成测试视频/音频流到 RTMP。
 - GStreamer RTMP 输出在配置了 `audio` 输入源时会混音；纯视频或生成管线仍使用静音 AAC 兜底。详细 A/V 同步策略目前仍较简单。

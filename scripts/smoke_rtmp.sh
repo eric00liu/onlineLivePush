@@ -14,10 +14,14 @@ PROBE_RTMP_URL="${PROBE_RTMP_URL:-$RTMP_URL}"
 HLS_URL="${HLS_URL:-http://127.0.0.1:8888/live/$STREAM_NAME/index.m3u8}"
 PROBE_FILE="$(mktemp "${TMPDIR:-/tmp}/online_obs_smoke_rtmp_probe.XXXXXX")"
 HLS_FILE="$(mktemp "${TMPDIR:-/tmp}/online_obs_smoke_rtmp_hls.XXXXXX")"
-CURL_AUTH_ARGS=()
-if [[ -n "$API_TOKEN" ]]; then
-  CURL_AUTH_ARGS=(-H "Authorization: Bearer $API_TOKEN")
-fi
+CURL_API_SILENT=(curl --noproxy '*' --silent)
+curl_api() {
+  if [[ -n "$API_TOKEN" ]]; then
+    "${CURL_API_SILENT[@]}" -H "Authorization: Bearer $API_TOKEN" "$@"
+  else
+    "${CURL_API_SILENT[@]}" "$@"
+  fi
+}
 
 require_cmd() {
   command -v "$1" >/dev/null || {
@@ -30,21 +34,21 @@ require_cmd curl
 require_cmd ffprobe
 
 cleanup() {
-  curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/stop" >/dev/null || true
-  curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
+  curl_api -X POST "$API_URL/sessions/$STREAM_NAME/stop" >/dev/null || true
+  curl_api -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
   rm -f "$PROBE_FILE" "$HLS_FILE"
 }
 trap cleanup EXIT
 
 echo "== checking API =="
-if ! curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" "$API_URL/health" >/dev/null; then
+if ! curl_api --fail "$API_URL/health" >/dev/null; then
   echo "API is not reachable at $API_URL; start it with: python3 -m online_obs --host 127.0.0.1 --port 8080" >&2
   exit 1
 fi
 
 echo "== creating smoke session =="
-curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions" \
+curl_api -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
+curl_api --fail -X POST "$API_URL/sessions" \
   -H 'Content-Type: application/json' \
   -d "{
     \"id\":\"$STREAM_NAME\",
@@ -52,16 +56,16 @@ curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sess
     \"output\":{\"type\":\"rtmp\",\"url\":\"$PUBLISH_RTMP_URL\",\"bitrateKbps\":2200}
   }" >/dev/null
 
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
+curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
   -H 'Content-Type: application/json' \
   -d '{"id":"camera","type":"testsrc","pattern":"smpte"}' >/dev/null
 
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X PUT "$API_URL/sessions/$STREAM_NAME/scene" \
+curl_api --fail -X PUT "$API_URL/sessions/$STREAM_NAME/scene" \
   -H 'Content-Type: application/json' \
   -d '{"layers":[{"id":"camera-layer","sourceId":"camera","x":0,"y":0,"width":1280,"height":720,"zIndex":0}]}' >/dev/null
 
 echo "== starting stream =="
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/start" \
+curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/start" \
   -H 'Content-Type: application/json' \
   -d "{\"backend\":\"$BACKEND\"}" >/dev/null
 

@@ -238,8 +238,8 @@ class SessionEngine:
         return_code = process.poll()
         if return_code is not None:
             session.process = None
-            if return_code == 0 and self._should_restart_looping_file(session):
-                self._append_process_log(session, "\n[online-obs] file source ended; restarting loop\n")
+            if return_code == 0 and self._should_restart_looping_source(session):
+                self._append_process_log(session, "\n[online-obs] looping source ended; restarting pipeline\n")
                 try:
                     backend = session.pipeline.get("backend", "gstreamer") if session.pipeline else "gstreamer"
                     args = session.pipeline.get("args", []) if session.pipeline else []
@@ -301,7 +301,7 @@ class SessionEngine:
         log_file.close()
         session.status = "running"
 
-    def _should_restart_looping_file(self, session: Session) -> bool:
+    def _should_restart_looping_source(self, session: Session) -> bool:
         if not session.pipeline or session.pipeline.get("backend") != "gstreamer":
             return False
         looping_sources = set(session.pipeline.get("loopingSources", []))
@@ -312,7 +312,12 @@ class SessionEngine:
             for layer in (session.scene or {}).get("layers", [])
             if layer.get("visible", True)
         }
-        return bool(looping_sources & visible_source_ids)
+        audio_source_ids = {
+            source_id
+            for source_id, source in session.sources.items()
+            if source.get("type") == "audio"
+        }
+        return bool(looping_sources & (visible_source_ids | audio_source_ids))
 
     def _append_process_log(self, session: Session, message: str) -> None:
         if not session.log_path:

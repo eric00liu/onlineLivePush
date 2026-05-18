@@ -54,9 +54,11 @@ class SessionEngineTests(unittest.TestCase):
             "type": "audio",
             "uri": "/tmp/music.wav",
             "volume": 0.75,
+            "loop": True,
         })
 
         self.assertEqual(session["sources"][0]["volume"], 0.75)
+        self.assertTrue(session["sources"][0]["loop"])
         with self.assertRaises(ValidationError):
             engine.add_source("demo", {
                 "id": "too_loud",
@@ -185,7 +187,7 @@ class SessionEngineTests(unittest.TestCase):
             "output": {"type": "rtmp", "url": "rtmp://127.0.0.1:1935/live/demo"},
         })
         engine.add_source("demo", {"id": "camera", "type": "testsrc"})
-        engine.add_source("demo", {"id": "music", "type": "audio", "uri": "/tmp/music.wav", "volume": 0.7})
+        engine.add_source("demo", {"id": "music", "type": "audio", "uri": "/tmp/music.wav", "volume": 0.7, "loop": True})
         engine.add_source("demo", {"id": "mic", "type": "audio", "uri": "/tmp/mic.wav", "volume": 1.2})
         engine.set_scene("demo", {"layers": [{"id": "camera-layer", "sourceId": "camera"}]})
 
@@ -194,6 +196,7 @@ class SessionEngineTests(unittest.TestCase):
         pipeline = result["session"]["pipeline"]
         command = pipeline["command"]
         self.assertEqual(pipeline["audioSources"], ["music", "mic"])
+        self.assertEqual(pipeline["loopingSources"], ["music"])
         self.assertIn("audiomixer name=amix", command)
         self.assertIn(f"uridecodebin uri={Path('/tmp/music.wav').resolve().as_uri()}", command)
         self.assertIn("volume volume=0.7", command)
@@ -215,6 +218,28 @@ class SessionEngineTests(unittest.TestCase):
         self.assertIn("videotestsrc is-live=true pattern=smpte", command)
         self.assertIn("audiomixer name=amix", command)
         self.assertNotIn("audiotestsrc is-live=true wave=silence", command)
+
+    def test_looping_audio_source_restarts_after_clean_exit(self):
+        class FinishedProcess:
+            def poll(self):
+                return 0
+
+        engine = SessionEngine()
+        engine.create_session({
+            "id": "demo",
+            "output": {"type": "rtmp", "url": "rtmp://127.0.0.1:1935/live/demo"},
+        })
+        engine.add_source("demo", {"id": "music", "type": "audio", "uri": "/tmp/music.wav", "loop": True})
+        engine.start("demo", {"dryRun": True})
+        session = engine.sessions["demo"]
+        session.status = "running"
+        session.process = FinishedProcess()
+
+        with patch.object(engine, "_launch_process") as launch_process:
+            payload = engine.get_session("demo")
+
+        self.assertEqual(payload["status"], "running")
+        launch_process.assert_called_once()
 
     def test_get_session_refreshes_exited_process_and_keeps_logs(self):
         class FinishedProcess:

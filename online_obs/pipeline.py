@@ -72,6 +72,8 @@ def build_pipeline(session) -> PipelinePlan:
             looping_sources.append(source["id"])
         args.extend(_source_chain(source, layer, canvas, index))
     for index, source in enumerate(audio_sources):
+        if source.get("loop"):
+            looping_sources.append(source["id"])
         args.extend(_audio_source_chain(source, index))
     metadata = {}
     if looping_sources:

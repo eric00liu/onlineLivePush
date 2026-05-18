@@ -20,10 +20,14 @@ UPLOAD_A_PATH=""
 UPLOAD_B_PATH=""
 UPLOAD_A_STORED_NAME=""
 UPLOAD_B_STORED_NAME=""
-CURL_AUTH_ARGS=()
-if [[ -n "$API_TOKEN" ]]; then
-  CURL_AUTH_ARGS=(-H "Authorization: Bearer $API_TOKEN")
-fi
+CURL_API_SILENT=(curl --noproxy '*' --silent)
+curl_api() {
+  if [[ -n "$API_TOKEN" ]]; then
+    "${CURL_API_SILENT[@]}" -H "Authorization: Bearer $API_TOKEN" "$@"
+  else
+    "${CURL_API_SILENT[@]}" "$@"
+  fi
+}
 
 require_cmd() {
   command -v "$1" >/dev/null || {
@@ -37,13 +41,13 @@ require_cmd ffmpeg
 require_cmd python3
 
 cleanup() {
-  curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/stop" >/dev/null || true
-  curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
+  curl_api -X POST "$API_URL/sessions/$STREAM_NAME/stop" >/dev/null || true
+  curl_api -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
   if [[ -n "$UPLOAD_A_STORED_NAME" ]]; then
-    curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/uploads/$UPLOAD_A_STORED_NAME" >/dev/null || true
+    curl_api -X DELETE "$API_URL/uploads/$UPLOAD_A_STORED_NAME" >/dev/null || true
   fi
   if [[ -n "$UPLOAD_B_STORED_NAME" ]]; then
-    curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/uploads/$UPLOAD_B_STORED_NAME" >/dev/null || true
+    curl_api -X DELETE "$API_URL/uploads/$UPLOAD_B_STORED_NAME" >/dev/null || true
   fi
   rm -f "$CREATED_BASE_A" "$CREATED_BASE_B" "$SAMPLE_A" "$SAMPLE_B" "$SOURCE_A_JSON" "$SOURCE_B_JSON" "$PIPELINE_JSON_FILE"
 }
@@ -58,15 +62,15 @@ ffmpeg -hide_banner -loglevel error -y \
   -ac 2 -ar 44100 "$SAMPLE_B"
 
 echo "== checking API =="
-if ! curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" "$API_URL/health" >/dev/null; then
+if ! curl_api --fail "$API_URL/health" >/dev/null; then
   echo "API is not reachable at $API_URL; start it with: python3 -m online_obs --host 127.0.0.1 --port 8080" >&2
   exit 1
 fi
 
 echo "== uploading sample audio files =="
-UPLOAD_A_JSON="$(curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/uploads" \
+UPLOAD_A_JSON="$(curl_api --fail -X POST "$API_URL/uploads" \
   -F "file=@$SAMPLE_A;type=audio/wav")"
-UPLOAD_B_JSON="$(curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/uploads" \
+UPLOAD_B_JSON="$(curl_api --fail -X POST "$API_URL/uploads" \
   -F "file=@$SAMPLE_B;type=audio/wav")"
 UPLOAD_A_PATH="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])' <<<"$UPLOAD_A_JSON")"
 UPLOAD_B_PATH="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])' <<<"$UPLOAD_B_JSON")"
@@ -76,8 +80,8 @@ test -f "$UPLOAD_A_PATH"
 test -f "$UPLOAD_B_PATH"
 
 echo "== creating audio-mix session =="
-curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions" \
+curl_api -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
+curl_api --fail -X POST "$API_URL/sessions" \
   -H 'Content-Type: application/json' \
   -d "{
     \"id\":\"$STREAM_NAME\",
@@ -85,7 +89,7 @@ curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sess
     \"output\":{\"type\":\"rtmp\",\"url\":\"$RTMP_URL\",\"bitrateKbps\":2200}
   }" >/dev/null
 
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
+curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
   -H 'Content-Type: application/json' \
   -d '{"id":"camera","type":"testsrc","pattern":"smpte"}' >/dev/null
 
@@ -93,7 +97,7 @@ python3 - "$UPLOAD_A_PATH" >"$SOURCE_A_JSON" <<'PY'
 import json
 import sys
 
-print(json.dumps({"id": "music_a", "type": "audio", "uri": sys.argv[1], "volume": 0.6}))
+print(json.dumps({"id": "music_a", "type": "audio", "uri": sys.argv[1], "volume": 0.6, "loop": True}))
 PY
 python3 - "$UPLOAD_B_PATH" >"$SOURCE_B_JSON" <<'PY'
 import json
@@ -102,19 +106,19 @@ import sys
 print(json.dumps({"id": "music_b", "type": "audio", "uri": sys.argv[1], "volume": 1.1}))
 PY
 
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
+curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
   -H 'Content-Type: application/json' \
   -d @"$SOURCE_A_JSON" >/dev/null
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
+curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
   -H 'Content-Type: application/json' \
   -d @"$SOURCE_B_JSON" >/dev/null
 
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X PUT "$API_URL/sessions/$STREAM_NAME/scene" \
+curl_api --fail -X PUT "$API_URL/sessions/$STREAM_NAME/scene" \
   -H 'Content-Type: application/json' \
   -d '{"layers":[{"id":"camera-layer","sourceId":"camera","x":0,"y":0,"width":1280,"height":720,"zIndex":0}]}' >/dev/null
 
 echo "== verifying generated audio-mix pipeline =="
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/start" \
+curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/start" \
   -H 'Content-Type: application/json' \
   -d '{"backend":"gstreamer","dryRun":true}' >"$PIPELINE_JSON_FILE"
 
@@ -131,6 +135,7 @@ expected_b = Path(sys.argv[3]).resolve().as_uri()
 
 assert pipeline["backend"] == "gstreamer"
 assert pipeline["audioSources"] == ["music_a", "music_b"], pipeline
+assert pipeline["loopingSources"] == ["music_a"], pipeline
 assert "audiomixer name=amix" in command
 assert f"uridecodebin uri={expected_a}" in command
 assert f"uridecodebin uri={expected_b}" in command
@@ -148,7 +153,7 @@ if [[ "$LIVE_AUDIO_SMOKE" != "1" ]]; then
 fi
 
 echo "== starting stream =="
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/start" \
+curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/start" \
   -H 'Content-Type: application/json' \
   -d '{"backend":"gstreamer"}' >/dev/null
 

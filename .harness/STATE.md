@@ -20,12 +20,12 @@ Harness hardening, upload material library, basic Docker Compose, SQLite persist
 - Source CRUD for supported MVP source types.
 - Scene and layer configuration.
 - GStreamer RTMP push with H264 video and silent AAC fallback audio.
-- GStreamer RTMP output can mix durable `audio` sources through `audiomixer` with per-source volume.
+- GStreamer RTMP output can mix durable `audio` sources through `audiomixer` with per-source volume and optional `loop`.
 - FFmpeg fallback backend for generated test video/audio to RTMP.
 - MediaMTX local RTMP/HLS workflow.
 - HLS auto-preview in the console using local HLS.js.
 - Console polls the selected session, updates status/preview automatically, and surfaces logs when a stream exits.
-- File sources support a `loop` flag, the console exposes a loop toggle, and GStreamer file-source live smoke passes.
+- File and audio sources support a `loop` flag, the console exposes a loop toggle, and GStreamer file-source live smoke passes.
 - OpenAPI JSON is stored in `docs/openapi.json` and served from `/openapi.json`.
 - Runtime configuration is centralized in `AppConfig`, can be set through environment variables or CLI flags, and is exposed to the console through `GET /config`.
 - A GStreamer-capable Docker image and Compose override can publish a real GStreamer stream to MediaMTX.
@@ -160,12 +160,17 @@ Most recent checks during harness hardening:
 - Final completion audit passed: `rg -n "^- \[ \]|^- \[~\]" .harness/BACKLOG.md` returned no task lines, and `scripts/harness_next.py` reported `No open or in-progress backlog tasks found.`
 - Final `scripts/dev_check.sh` passed with 33 tests.
 - Final `python3 -m json.tool docs/openapi.json >/dev/null`, `docker compose config >/dev/null`, and `docker compose -f docker-compose.yml -f docker-compose.gstreamer.yml config >/dev/null` passed.
+- `python3 -m unittest tests.test_engine` passed with 15 focused tests after adding `audio.loop` normalization, pipeline metadata, and clean-exit restart coverage.
+- `API_URL=http://127.0.0.1:18091 scripts/smoke_audio_mix.sh` passed with a looping audio source and `loopingSources` assertion.
+- Browser verification passed on temporary API `http://127.0.0.1:18091/`: selecting `audio` showed the loop checkbox, saving an audio source persisted `loop: true`, and the source list showed `loop`.
+- Screenshot saved at `artifacts/audio-loop-ui.png`.
+- `scripts/dev_check.sh` passed with 34 tests after adding audio source loop support.
 
 ## Active Caveats
 
 - State is in memory unless `--db` or `ONLINE_OBS_DB` is set.
 - Uploaded files are stored locally in `uploads/`; files without SQLite metadata still use directory-derived display metadata.
-- File-source looping restarts the GStreamer pipeline at clip end; it is not seamless frame-accurate looping yet.
+- File/audio-source looping restarts the GStreamer pipeline at source end; it is not seamless frame-accurate looping yet.
 - Scene updates still require `restart` to apply to a running stream.
 - RTMP output mixes configured `audio` sources; video-only generated pipelines still use silent AAC fallback.
 - Git has been initialized, but all project files remain untracked until an initial commit is intentionally created.

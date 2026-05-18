@@ -21,10 +21,14 @@ SOURCE_JSON="$(mktemp "${TMPDIR:-/tmp}/online_obs_upload_source.XXXXXX")"
 HLS_FILE="$(mktemp "${TMPDIR:-/tmp}/online_obs_smoke_upload_hls.XXXXXX")"
 UPLOAD_PATH=""
 UPLOAD_STORED_NAME=""
-CURL_AUTH_ARGS=()
-if [[ -n "$API_TOKEN" ]]; then
-  CURL_AUTH_ARGS=(-H "Authorization: Bearer $API_TOKEN")
-fi
+CURL_API_SILENT=(curl --noproxy '*' --silent)
+curl_api() {
+  if [[ -n "$API_TOKEN" ]]; then
+    "${CURL_API_SILENT[@]}" -H "Authorization: Bearer $API_TOKEN" "$@"
+  else
+    "${CURL_API_SILENT[@]}" "$@"
+  fi
+}
 
 require_cmd() {
   command -v "$1" >/dev/null || {
@@ -38,10 +42,10 @@ require_cmd ffmpeg
 require_cmd python3
 
 cleanup() {
-  curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/stop" >/dev/null || true
-  curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
+  curl_api -X POST "$API_URL/sessions/$STREAM_NAME/stop" >/dev/null || true
+  curl_api -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
   if [[ -n "$UPLOAD_STORED_NAME" ]]; then
-    curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/uploads/$UPLOAD_STORED_NAME" >/dev/null || true
+    curl_api -X DELETE "$API_URL/uploads/$UPLOAD_STORED_NAME" >/dev/null || true
   elif [[ -n "$UPLOAD_PATH" ]]; then
     rm -f "$UPLOAD_PATH"
   fi
@@ -60,25 +64,25 @@ ffmpeg -hide_banner -loglevel error -y \
   "$SAMPLE_FILE"
 
 echo "== checking API =="
-if ! curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" "$API_URL/health" >/dev/null; then
+if ! curl_api --fail "$API_URL/health" >/dev/null; then
   echo "API is not reachable at $API_URL; start it with: python3 -m online_obs --host 127.0.0.1 --port 8080" >&2
   exit 1
 fi
 
 echo "== uploading sample file =="
-UPLOAD_JSON="$(curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/uploads" \
+UPLOAD_JSON="$(curl_api --fail -X POST "$API_URL/uploads" \
   -F "file=@$SAMPLE_FILE;type=video/mp4")"
 UPLOAD_PATH="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])' <<<"$UPLOAD_JSON")"
 UPLOAD_STORED_NAME="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["storedName"])' <<<"$UPLOAD_JSON")"
 test -f "$UPLOAD_PATH"
 
 echo "== checking uploaded asset list =="
-ASSETS_JSON="$(curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" "$API_URL/uploads")"
+ASSETS_JSON="$(curl_api --fail "$API_URL/uploads")"
 python3 -c 'import json,sys; data=json.load(sys.stdin); name=sys.argv[1]; assert any(item["storedName"] == name for item in data["uploads"])' "$UPLOAD_STORED_NAME" <<<"$ASSETS_JSON"
 
 echo "== creating file-source session =="
-curl --noproxy '*' --silent "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions" \
+curl_api -X DELETE "$API_URL/sessions/$STREAM_NAME" >/dev/null || true
+curl_api --fail -X POST "$API_URL/sessions" \
   -H 'Content-Type: application/json' \
   -d "{
     \"id\":\"$STREAM_NAME\",
@@ -93,16 +97,16 @@ import sys
 print(json.dumps({"id": "uploaded_clip", "type": "file", "uri": sys.argv[1], "loop": True}))
 PY
 
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
+curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/sources" \
   -H 'Content-Type: application/json' \
   -d @"$SOURCE_JSON" >/dev/null
 
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X PUT "$API_URL/sessions/$STREAM_NAME/scene" \
+curl_api --fail -X PUT "$API_URL/sessions/$STREAM_NAME/scene" \
   -H 'Content-Type: application/json' \
   -d '{"layers":[{"id":"uploaded-clip-layer","sourceId":"uploaded_clip","x":0,"y":0,"width":1280,"height":720,"zIndex":0}]}' >/dev/null
 
 echo "== verifying generated file-source pipeline =="
-PIPELINE_JSON="$(curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/start" \
+PIPELINE_JSON="$(curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/start" \
   -H 'Content-Type: application/json' \
   -d '{"backend":"gstreamer","dryRun":true}')"
 grep -F -q "$UPLOAD_PATH" <<<"$PIPELINE_JSON"
@@ -112,7 +116,7 @@ grep -F -q '"loopingSources": ["uploaded_clip"]' <<<"$PIPELINE_JSON"
 if [[ "$LIVE_FILE_SMOKE" != "1" ]]; then
   echo "LIVE_FILE_SMOKE=0; skipping live file-source push"
   echo "== deleting uploaded asset =="
-  curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X DELETE "$API_URL/uploads/$UPLOAD_STORED_NAME" >/dev/null
+  curl_api --fail -X DELETE "$API_URL/uploads/$UPLOAD_STORED_NAME" >/dev/null
   UPLOAD_STORED_NAME=""
   test ! -f "$UPLOAD_PATH"
   echo "smoke_upload_file complete"
@@ -120,7 +124,7 @@ if [[ "$LIVE_FILE_SMOKE" != "1" ]]; then
 fi
 
 echo "== starting stream =="
-curl --noproxy '*' --silent --fail "${CURL_AUTH_ARGS[@]}" -X POST "$API_URL/sessions/$STREAM_NAME/start" \
+curl_api --fail -X POST "$API_URL/sessions/$STREAM_NAME/start" \
   -H 'Content-Type: application/json' \
   -d '{"backend":"gstreamer"}' >/dev/null
 
